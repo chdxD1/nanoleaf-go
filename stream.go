@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 )
 
-var (
-	VersionV1 = "v1"
-	VersionV2 = "v2"
-)
+const VersionV1 string = "v1"
+const VersionV2 string = "v2"
+const DefaultStreamingPort int = 60222
 
 // NanoStream udp connection to nanoleaf
 type NanoStream struct {
@@ -64,9 +64,8 @@ func (s *NanoStream) WriteEffect(effect StreamEffect) error {
 		binary.Write(buf, binary.LittleEndian, uint8(len(effect.Panels)))
 
 		for _, panel := range effect.Panels {
-			nFrames := 1
 			binary.Write(buf, binary.LittleEndian, uint8(panel.ID))
-			binary.Write(buf, binary.LittleEndian, nFrames)
+			binary.Write(buf, binary.LittleEndian, uint8(1))
 
 			binary.Write(buf, binary.LittleEndian, uint8(panel.Frame.Red))
 			binary.Write(buf, binary.LittleEndian, uint8(panel.Frame.Green))
@@ -75,16 +74,16 @@ func (s *NanoStream) WriteEffect(effect StreamEffect) error {
 			binary.Write(buf, binary.LittleEndian, uint8(panel.Frame.Transition))
 		}
 	} else if s.version == VersionV2 {
-		binary.Write(buf, binary.LittleEndian, uint16(len(effect.Panels)))
+		binary.Write(buf, binary.BigEndian, uint16(len(effect.Panels)))
 
 		for _, panel := range effect.Panels {
-			binary.Write(buf, binary.LittleEndian, uint16(panel.ID))
+			binary.Write(buf, binary.BigEndian, uint16(panel.ID))
 
-			binary.Write(buf, binary.LittleEndian, uint8(panel.Frame.Red))
-			binary.Write(buf, binary.LittleEndian, uint8(panel.Frame.Green))
-			binary.Write(buf, binary.LittleEndian, uint8(panel.Frame.Blue))
-			binary.Write(buf, binary.LittleEndian, uint8(panel.Frame.White))
-			binary.Write(buf, binary.LittleEndian, uint16(panel.Frame.Transition))
+			binary.Write(buf, binary.BigEndian, uint8(panel.Frame.Red))
+			binary.Write(buf, binary.BigEndian, uint8(panel.Frame.Green))
+			binary.Write(buf, binary.BigEndian, uint8(panel.Frame.Blue))
+			binary.Write(buf, binary.BigEndian, uint8(panel.Frame.White))
+			binary.Write(buf, binary.BigEndian, uint16(panel.Frame.Transition))
 		}
 	}
 
@@ -111,8 +110,8 @@ func (s *NanoStream) Activate(version string) error {
 		},
 	}
 
-	url := fmt.Sprintf("%s/%s/effects", s.nano.url, s.nano.token)
-	resp, err := s.nano.client.R().SetHeader("Content-Type", "application/json").SetBody(body).Put(url)
+	requestUrl := fmt.Sprintf("%s/%s/effects", s.nano.url, s.nano.token)
+	resp, err := s.nano.client.R().SetHeader("Content-Type", "application/json").SetBody(body).Put(requestUrl)
 
 	if err != nil {
 		return err
@@ -122,21 +121,32 @@ func (s *NanoStream) Activate(version string) error {
 		return ErrUnauthorized
 	}
 
-	if resp.StatusCode() != http.StatusOK {
-		return ErrUnexpectedResponse
-	}
+	if resp.StatusCode() == http.StatusOK {
+		var jsonResponse struct {
+			Address string `json:"streamControlIpAddr"`
+			Port    int    `json:"streamControlPort"`
+		}
 
-	var jsonResponse struct {
-		Address string `json:"streamControlIpAddr"`
-		Port    int    `json:"streamControlPort"`
-	}
+		if err := json.Unmarshal(resp.Body(), &jsonResponse); err != nil {
+			return ErrParsingJSON
+		}
 
-	if err := json.Unmarshal(resp.Body(), &jsonResponse); err != nil {
-		return ErrParsingJSON
-	}
+		s.address = jsonResponse.Address
+		s.port = jsonResponse.Port
+	} else if resp.StatusCode() == http.StatusNoContent {
+		u, err := url.Parse(s.nano.url)
+		if err != nil {
+			return err
+		}
 
-	s.address = jsonResponse.Address
-	s.port = jsonResponse.Port
+		host, _, err := net.SplitHostPort(u.Host)
+		if err != nil {
+			return err
+		}
+
+		s.address = host
+		s.port = DefaultStreamingPort
+	}
 
 	return nil
 }
