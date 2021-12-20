@@ -178,11 +178,9 @@ func (e *NanoEffects) ToString(effect StreamEffect) string {
 	data := fmt.Sprintf("%d", len(effect.Panels))
 
 	for _, panel := range effect.Panels {
-		data = fmt.Sprintf("%s %d %d", data, panel.ID, len(panel.Frames))
+		data = fmt.Sprintf("%s %d %d", data, panel.ID, 1)
 
-		for _, frame := range panel.Frames {
-			data = fmt.Sprintf("%s %d %d %d 0 %d", data, frame.Red, frame.Green, frame.Blue, frame.Transition)
-		}
+		data = fmt.Sprintf("%s %d %d %d %d %d", data, panel.Frame.Red, panel.Frame.Green, panel.Frame.Blue, panel.Frame.White, panel.Frame.Transition)
 	}
 
 	return data
