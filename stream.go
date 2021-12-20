@@ -97,7 +97,7 @@ func (s *NanoStream) WriteEffect(effect StreamEffect) error {
 
 // Activate activates extControl to allow creating a udp connection
 func (s *NanoStream) Activate(version string) error {
-	if version != VersionV1 || version != VersionV2 {
+	if version != VersionV1 && version != VersionV2 {
 		return ErrInvalidVersion
 	}
 
