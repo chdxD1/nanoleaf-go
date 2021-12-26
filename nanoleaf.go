@@ -105,6 +105,11 @@ func (n *Nanoleaf) GetToken() string {
 	return n.token
 }
 
+// GetUrl returns URL of the Nanoleafs
+func (n *Nanoleaf) GetUrl() string {
+	return n.url
+}
+
 // IsConnected checks if we have a connection so far
 func (n *Nanoleaf) IsConnected() bool {
 	return n.token != ""
